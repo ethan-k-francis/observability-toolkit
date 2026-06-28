@@ -1,50 +1,53 @@
 # Observability Toolkit
 
-**Custom Prometheus exporter with chaos engineering validation**
+**Learn how to watch your app, set health targets, and prove your alerts actually work**
 
-A purpose-built observability stack that demonstrates SRE best practices: custom metric collection, SLO-based alerting, automated dashboards, and chaos engineering validation — all wired together in a reproducible Docker Compose environment.
+This project is a small, runnable demo of **observability** — the practice of measuring how your software is doing so you can fix problems before users notice.
 
----
+You get a fake app that reports numbers (database usage, queue size, cache hits), tools that collect and graph those numbers, alerts when things look wrong, and scripts that deliberately break things so you can confirm the alerts fire.
 
-## Design Document
-
-### Problem
-
-Standard Prometheus exporters (node_exporter, cAdvisor) capture infrastructure metrics but miss **application-specific health signals** that are critical for SLO-based operations:
-
-- **DB connection pool saturation** — when active connections approach the pool maximum, new queries queue up, causing cascading latency increases. Generic exporters don't expose pool internals.
-- **Queue backpressure** — rising queue depth is a leading indicator of downstream degradation. By the time CPU or memory alerts fire, users are already impacted.
-- **Cache efficiency** — a dropping cache hit rate means more requests hit the slower backing store. This is invisible to infrastructure-level monitoring.
-
-### Trade-offs
-
-| Decision | Chosen | Alternative | Rationale |
-|---|---|---|---|
-| Collection model | Pull-based custom exporter | Push (StatsD/OTLP) | Decouples collection from application lifecycle; native Prometheus compatibility; simpler HA (Prometheus handles retry) |
-| Exporter language | Go | Python, Rust | Go is the Prometheus ecosystem language; `client_golang` is the reference implementation; goroutines handle concurrent metric collection efficiently |
-| Alerting approach | SLO-based thresholds | Static thresholds | SLOs align alerts with user impact; reduces alert fatigue by focusing on what matters |
-| Chaos validation | Python scripts + Docker API | Litmus/Chaos Monkey | Lightweight, no cluster dependencies; validates the specific alerting pipeline we built |
-
-### Outcome
-
-- SLO breach detection in **under 60 seconds** with custom dashboards
-- End-to-end validation via chaos engineering proves the alerting pipeline works
-- Fully reproducible with `make up` — zero manual configuration
+No prior Site Reliability Engineering (SRE) or Prometheus experience required. If you can run `make up`, you can follow along.
 
 ---
 
-## Architecture
+## What you'll learn
+
+| Topic | Plain English |
+|---|---|
+| **Metrics** | Numbers your app reports over time (e.g. "42 requests waiting") |
+| **Monitoring** | Collecting those numbers and storing them |
+| **Dashboards** | Charts that make the numbers easy to read |
+| **Service Level Indicators (SLIs)** | The specific numbers you measure (e.g. queue depth, cache hit rate) |
+| **Service Level Objectives (SLOs)** | Agreed targets for "healthy" (e.g. "queue should stay under 100 messages") |
+| **Alerting** | Notifications when a target is missed |
+| **Chaos testing** | Intentionally causing problems to verify alerts work |
+
+---
+
+## The problem this solves
+
+Most off-the-shelf monitoring tools tell you about **servers** (CPU, memory, disk). They often miss **application** signals that actually affect users:
+
+- **Database connection pool** — Think of a parking lot with limited spaces. When it's almost full, new requests wait in line and everything slows down.
+- **Queue depth** — Messages waiting to be processed. A growing backlog usually means trouble *before* CPU alerts go off.
+- **Cache hit rate** — How often fast memory answers a request vs. hitting the slow database. A dropping rate means more slow requests.
+
+This project shows how to measure those app-level signals, set sensible targets, and test that your alerts catch real problems.
+
+---
+
+## How it works
 
 ```mermaid
 graph LR
     subgraph Docker Compose
         E[Exporter<br/>Go :9090] -->|scrape /metrics| P[Prometheus<br/>:9091]
         P -->|datasource| G[Grafana<br/>:3000]
-        P --> AR[Alert Rules<br/>SLO-based]
+        P --> AR[Alert Rules<br/>health targets]
     end
 
     CR[Chaos Runner<br/>Python] -->|POST /chaos| E
-    CR -->|docker API| E
+    CR -->|Docker API| E
     CR -->|query alerts| P
 
     style E fill:#2d6a4f,color:#fff
@@ -53,80 +56,86 @@ graph LR
     style CR fill:#9b2226,color:#fff
 ```
 
-**Data flow:** The Go exporter collects application-level metrics (DB pool, queue, cache) and exposes them on `/metrics`. Prometheus scrapes every 15s, evaluates SLO-based alert rules, and feeds Grafana dashboards. The chaos runner injects failures to validate the full pipeline.
+**In order:**
+
+1. A **Go exporter** (small program) exposes fake-but-realistic app metrics at `/metrics`.
+2. **Prometheus** (time-series database) pulls those numbers every 15 seconds.
+3. **Grafana** draws dashboards from Prometheus data.
+4. **Alert rules** compare metrics to Service Level Objective (SLO) targets (see [docs/slo-definitions.md](docs/slo-definitions.md)).
+5. **Chaos scripts** spike metrics or kill processes to prove alerts fire end-to-end.
 
 ---
 
-## Quick Start
+## Quick start
 
 ```bash
 # Start everything (exporter + Prometheus + Grafana)
 make up
 
-# View metrics
+# See raw metrics (plain text numbers)
 curl http://localhost:9090/metrics
 
-# Open Grafana dashboard
-open http://localhost:3000  # admin/admin
+# Open dashboards in your browser
+open http://localhost:3000  # login: admin / admin
 
-# Run chaos engineering tests
+# Run a chaos test (spike metrics, check alerts)
 make chaos-spike
 
-# Tear down
+# Stop everything
 make down
 ```
 
 ---
 
-## Tech Stack
+## What's inside
 
-| Component | Technology | Purpose |
+| Piece | Technology | What it does |
 |---|---|---|
-| Exporter | Go 1.23 + client_golang | Custom Prometheus metric collection |
-| Monitoring | Prometheus | Time-series storage, PromQL, alerting |
-| Dashboards | Grafana | Visualization, auto-provisioned |
-| Chaos | Python + Docker SDK | Failure injection and alert validation |
-| Orchestration | Docker Compose | Single-command reproducible environment |
+| Exporter | Go | Collects and publishes app metrics |
+| Prometheus | Prometheus | Stores metrics, runs alert rules |
+| Grafana | Grafana | Visualizes metrics in dashboards |
+| Chaos scripts | Python | Breaks things on purpose to test alerts |
+| Orchestration | Docker Compose | Starts the whole stack with one command |
 
 ---
 
-## Structure
+## Project layout
 
 ```
 observability-toolkit/
 ├── cmd/exporter/          # Exporter entry point
-│   └── main.go
 ├── internal/
-│   ├── collector/         # Prometheus collector implementation
-│   │   ├── collector.go   # Top-level collector (aggregates sub-collectors)
-│   │   ├── dbpool.go      # Database connection pool metrics
-│   │   ├── queue.go       # Message queue metrics
-│   │   └── cache.go       # Cache performance metrics
-│   └── simulator/         # Realistic metric value generation
-│       └── simulator.go
-├── chaos/                 # Chaos engineering scripts
-│   ├── chaos_runner.py    # CLI runner
-│   └── scenarios/         # Individual chaos scenarios
-├── prometheus/
-│   ├── prometheus.yml     # Scrape configuration
-│   └── rules/             # SLO-based alerting rules
-├── grafana/
-│   ├── provisioning/      # Auto-configuration (datasources, dashboard provider)
-│   └── dashboards/        # Dashboard JSON definitions
-├── docs/                  # SLO definitions and design docs
+│   ├── collector/         # Metric collectors (DB pool, queue, cache)
+│   └── simulator/         # Generates realistic fake values
+├── chaos/                 # Chaos testing scripts
+├── prometheus/            # Scrape config + alert rules
+├── grafana/               # Dashboards (auto-loaded)
+├── docs/                  # Health target definitions
 ├── docker-compose.yaml
-├── Dockerfile
-├── Makefile
-└── go.mod
+└── Makefile
 ```
 
 ---
 
-## Future Enhancements
+---
 
-- **OpenTelemetry bridge** — export metrics via OTLP in addition to Prometheus scraping
-- **Real data sources** — connect to actual PostgreSQL, Redis, and RabbitMQ instances
-- **Kubernetes deployment** — Helm chart with ServiceMonitor for Prometheus Operator
-- **Runbook automation** — trigger remediation scripts when specific alerts fire
-- **Load testing integration** — coordinate chaos scenarios with k6 load tests
-- **Multi-tenant metrics** — add tenant labels for SaaS-style metric isolation
+## Design choices (for the curious)
+
+| Decision | Why |
+|---|---|
+| Pull-based metrics | Prometheus asks the exporter for data (simple, reliable retries) |
+| Go for the exporter | Standard language in the Prometheus ecosystem |
+| Target-based alerts | Alert on user impact, not arbitrary CPU thresholds |
+| Python chaos scripts | Lightweight; no extra cluster needed |
+
+Details and Prometheus Query Language (PromQL) examples: [docs/slo-definitions.md](docs/slo-definitions.md).
+
+---
+
+## Ideas for extending this
+
+- Connect to real PostgreSQL, Redis, or RabbitMQ instead of simulated data
+- Export metrics via OpenTelemetry (OTel) — an industry-standard telemetry format
+- Deploy on Kubernetes (K8s) with a Helm chart
+- Auto-run fix scripts when specific alerts fire
+
