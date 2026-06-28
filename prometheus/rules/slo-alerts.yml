@@ -1,0 +1,124 @@
+# SLO-based alerting rules for the observability toolkit.
+#
+# These alerts are designed around Service Level Objectives (SLOs) rather
+# than arbitrary static thresholds. Each alert maps to a specific SLI
+# (Service Level Indicator) with a defined SLO target and a rationale
+# for the threshold.
+#
+# See docs/slo-definitions.md for the full SLI/SLO specification.
+
+groups:
+  - name: observability-toolkit-slos
+    # Evaluate rules every 15 seconds (matches scrape interval for minimal lag).
+    interval: 15s
+    rules:
+
+      # --- DB Pool Health ---
+      # SLI: Connection pool utilization (active / max)
+      # SLO: Utilization < 85% over any 5-minute window
+      # Rationale: Above 85%, new connections start queuing and latency
+      # increases non-linearly. The 5m for-duration prevents alerting on
+      # brief spikes during normal request bursts.
+      - alert: HighDBPoolUtilization
+        expr: >
+          obs_dbpool_active_connections / obs_dbpool_max_connections > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          subsystem: dbpool
+        annotations:
+          summary: "DB pool utilization above 85% for 5 minutes"
+          description: >
+            Database connection pool utilization is
+            {{ $value | humanizePercentage }} (threshold: 85%).
+            Active connections are approaching the pool limit, which causes
+            new queries to queue and increases request latency.
+          runbook: "Scale the connection pool or investigate long-running queries."
+
+      # --- Queue Backpressure ---
+      # SLI: Queue depth (messages waiting to be processed)
+      # SLO: Queue depth < 100 messages sustained
+      # Rationale: A queue depth above 100 indicates consumers can't keep up
+      # with producers. The 3m for-duration allows for temporary burst absorption
+      # while catching sustained backpressure.
+      - alert: QueueBackpressure
+        expr: >
+          obs_queue_depth > 100
+        for: 3m
+        labels:
+          severity: warning
+          subsystem: queue
+        annotations:
+          summary: "Queue depth above 100 for 3 minutes"
+          description: >
+            Message queue depth is {{ $value | humanize }} messages
+            (threshold: 100). Consumers are not processing messages fast
+            enough, causing backpressure that will eventually lead to
+            message drops or timeouts.
+          runbook: "Scale consumers or investigate downstream dependencies."
+
+      # --- Cache Efficiency ---
+      # SLI: Cache hit rate (hits / (hits + misses) over 5m window)
+      # SLO: Hit rate >= 80%
+      # Rationale: Below 80% hit rate, more than 1 in 5 requests hit the
+      # slower backing store, significantly increasing average latency.
+      # The 10m for-duration accounts for cache warm-up after restarts.
+      - alert: LowCacheHitRate
+        expr: >
+          rate(obs_cache_hits_total[5m])
+          / (rate(obs_cache_hits_total[5m]) + rate(obs_cache_misses_total[5m]))
+          < 0.80
+        for: 10m
+        labels:
+          severity: warning
+          subsystem: cache
+        annotations:
+          summary: "Cache hit rate below 80% for 10 minutes"
+          description: >
+            Cache hit rate is {{ $value | humanizePercentage }}
+            (threshold: 80%). A low hit rate means more requests are falling
+            through to the slower backing store, increasing latency.
+          runbook: "Check cache size, eviction rate, and key distribution."
+
+      # --- Processing Latency ---
+      # SLI: p99 processing duration (from histogram)
+      # SLO: p99 latency < 2 seconds
+      # Rationale: A p99 above 2s means 1% of requests are experiencing
+      # unacceptable delays. The 5m for-duration smooths out transient
+      # spikes from GC pauses or network blips.
+      - alert: HighProcessingLatency
+        expr: >
+          histogram_quantile(0.99,
+            rate(obs_queue_processing_duration_seconds_bucket[5m])
+          ) > 2
+        for: 5m
+        labels:
+          severity: warning
+          subsystem: queue
+        annotations:
+          summary: "Processing latency p99 above 2 seconds for 5 minutes"
+          description: >
+            The 99th percentile processing duration is
+            {{ $value | humanizeDuration }} (threshold: 2s). This indicates
+            a significant portion of messages are taking too long to process.
+          runbook: "Profile message processing, check downstream service latency."
+
+      # --- Exporter Availability ---
+      # SLI: Exporter scrape success (Prometheus built-in `up` metric)
+      # SLO: Exporter available 99.9% of the time
+      # Rationale: If the exporter is down, we lose all visibility into
+      # application health. The 1m for-duration fires quickly because
+      # losing observability is critical — you can't fix what you can't see.
+      - alert: ExporterDown
+        expr: >
+          up{job="observability-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          subsystem: exporter
+        annotations:
+          summary: "Observability exporter is down"
+          description: >
+            The observability-toolkit exporter has been unreachable for
+            over 1 minute. No application health metrics are being collected.
+          runbook: "Check container status: docker compose ps. Restart: make up"

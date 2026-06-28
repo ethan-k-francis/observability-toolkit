@@ -1,0 +1,76 @@
+# Docker Compose stack for the observability toolkit.
+#
+# Three services form the complete observability pipeline:
+#   1. exporter  — custom Go Prometheus exporter (port 9090)
+#   2. prometheus — time-series DB + alerting engine (port 9091)
+#   3. grafana   — dashboards and visualization (port 3000)
+#
+# Usage:
+#   docker compose up -d --build   # Start everything
+#   docker compose down            # Stop and remove containers
+#   docker compose logs -f         # Follow all logs
+
+services:
+  # Custom exporter that collects application-level metrics (DB pool,
+  # queue, cache) and serves them in Prometheus exposition format.
+  exporter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "9090:9090"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+
+  # Prometheus scrapes the exporter every 15s, stores time-series data,
+  # and evaluates alerting rules. Port 9091 on the host maps to 9090
+  # inside the container (avoids port conflict with the exporter).
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    volumes:
+      - ./prometheus:/etc/prometheus
+      - prometheus-data:/prometheus
+    ports:
+      - "9091:9090"
+    command:
+      # Enable the web UI lifecycle API so we can reload config without restart.
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=7d"
+      - "--web.enable-lifecycle"
+    depends_on:
+      exporter:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Grafana auto-provisions the Prometheus datasource and dashboard directory
+  # on startup. No manual configuration needed — everything is code-defined.
+  grafana:
+    image: grafana/grafana:11.1.0
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    environment:
+      # Default admin credentials (fine for local dev, never for production).
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      # Allow anonymous access as Viewer for easy demo access.
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+# Named volumes persist data across container restarts. Without these,
+# Prometheus history and Grafana settings would be lost on `docker compose down`.
+volumes:
+  prometheus-data:
+  grafana-data:

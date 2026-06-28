@@ -1,0 +1,22 @@
+# Grafana datasource provisioning for Prometheus.
+#
+# This file is read by Grafana on startup to automatically configure
+# the Prometheus datasource. No manual "Add data source" step needed.
+#
+# The UID "prometheus" is referenced by dashboard JSON files to bind
+# panels to this specific datasource.
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    uid: prometheus
+    access: proxy
+    # "prometheus" resolves via Docker Compose DNS to the Prometheus container.
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      # Time interval matches our scrape_interval for accurate rate() calculations.
+      timeInterval: "15s"

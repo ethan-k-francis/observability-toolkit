@@ -1,0 +1,30 @@
+# Prometheus configuration for the observability toolkit (with alerting rules).
+#
+# This is the updated configuration that includes rule_files for SLO-based
+# alerting. Prometheus evaluates these rules every evaluation_interval and
+# fires alerts when conditions are met for the specified for-duration.
+
+global:
+  # How often Prometheus scrapes targets. 15s is a good balance between
+  # resolution and resource usage.
+  scrape_interval: 15s
+
+  # How often Prometheus evaluates alerting and recording rules.
+  # Should be <= scrape_interval for timely alert evaluation.
+  evaluation_interval: 15s
+
+# Rule files contain alerting rules evaluated against scraped metrics.
+# Prometheus watches these files and reloads on changes (if lifecycle API
+# is enabled). The glob pattern loads all .yml files from the rules directory.
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+scrape_configs:
+  # Scrape the custom exporter. The job_name appears as a label on all
+  # metrics from this target, and is referenced by alert rules (e.g.,
+  # up{job="observability-exporter"} for the ExporterDown alert).
+  - job_name: "observability-exporter"
+    static_configs:
+      - targets: ["exporter:9090"]
+        labels:
+          environment: "demo"

@@ -1,28 +1,119 @@
+# CI pipeline for the observability-toolkit.
+#
+# Runs on every push to main and on pull requests. Four jobs validate
+# code quality in parallel:
+#   1. lint   — static analysis with golangci-lint
+#   2. test   — unit tests with race detection
+#   3. build  — compile the binary to verify it builds
+#   4. docker — build the Docker image to verify Dockerfile works
+#
+# Why separate jobs instead of one big job?
+# Parallel jobs give faster feedback — if linting fails, you see it
+# immediately without waiting for tests to finish. Each job runs in its
+# own clean environment, preventing cross-contamination.
+
 name: CI
 
 on:
   push:
-    branches: [main, "efrancis/*"]
+    branches: [main]
   pull_request:
     branches: [main]
 
-permissions:
-  contents: read
+# Cancel in-progress runs for the same branch/PR. This saves CI minutes
+# when you push multiple commits quickly — only the latest matters.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
+  # Static analysis catches bugs, style issues, and potential problems
+  # without running the code. golangci-lint bundles dozens of linters
+  # (govet, errcheck, staticcheck, etc.) into a single fast tool.
   lint:
+    name: Lint
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+      - uses: actions/setup-go@v5
         with:
-          python-version: "3.12"
+          go-version: "1.23"
 
-      - name: Install pre-commit
-        run: pip install pre-commit==4.1.0
+      # golangci-lint-action handles caching and is faster than running
+      # golangci-lint directly. The version should match what developers
+      # run locally for consistent results.
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
 
-      - name: Run pre-commit hooks
-        run: pre-commit run --all-files --show-diff-on-failure
+  # Unit tests with race detection enabled. The race detector instruments
+  # memory accesses to find concurrent access bugs that only manifest
+  # under specific timing conditions.
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache: true
+
+      - name: Run tests
+        run: go test -race -v -coverprofile=coverage.out ./...
+
+      # Upload coverage for visibility. Even without a coverage gate,
+      # seeing the number helps track testing progress over time.
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.out
+
+  # Build verification ensures the binary compiles on a clean machine.
+  # This catches missing dependencies, build tag issues, and import errors
+  # that might work locally but fail in CI.
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache: true
+
+      - name: Build binary
+        run: go build -o bin/observability-toolkit ./cmd/exporter/
+
+      # Verify the binary actually runs (not just compiles).
+      - name: Verify binary
+        run: ./bin/observability-toolkit &
+          sleep 2
+          curl -f http://localhost:9090/health
+          kill %1
+
+  # Docker build verification ensures the multi-stage Dockerfile works.
+  # This catches issues like missing files in the build context, incorrect
+  # COPY paths, or incompatible base images.
+  docker-build:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t observability-toolkit:ci .
+
+      # Verify the container starts and serves metrics.
+      - name: Verify container
+        run: |
+          docker run -d --name test-exporter -p 9090:9090 observability-toolkit:ci
+          sleep 3
+          curl -f http://localhost:9090/health
+          curl -f http://localhost:9090/metrics | head -5
+          docker stop test-exporter
