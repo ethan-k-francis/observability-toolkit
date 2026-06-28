@@ -92,10 +92,12 @@ jobs:
 
       # Verify the binary actually runs (not just compiles).
       - name: Verify binary
-        run: ./bin/observability-toolkit &
+        run: |
+          ./bin/observability-toolkit &
+          pid=$!
           sleep 2
           curl -f http://localhost:9090/health
-          kill %1
+          kill "$pid"
 
   # Docker build verification ensures the multi-stage Dockerfile works.
   # This catches issues like missing files in the build context, incorrect
