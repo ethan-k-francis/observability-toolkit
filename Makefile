@@ -8,6 +8,7 @@ COMPOSE_PROJECT := observability-toolkit
 
 .PHONY: build test lint up down clean help
 .PHONY: chaos-run chaos-kill chaos-spike chaos-stress
+.PHONY: up-logs down-logs
 
 # --- Build & Test ---
 
@@ -32,6 +33,14 @@ up:
 ## down: Stop and remove all containers
 down:
 	docker compose -p $(COMPOSE_PROJECT) down
+
+## up-logs: Start metrics stack plus Loki/Promtail/Grafana logs profile
+up-logs:
+	docker compose -p $(COMPOSE_PROJECT) -f docker-compose.yaml -f docker-compose.loki.yaml --profile logs up -d --build
+
+## down-logs: Stop metrics and logging stacks
+down-logs:
+	docker compose -p $(COMPOSE_PROJECT) -f docker-compose.yaml -f docker-compose.loki.yaml --profile logs down
 
 ## clean: Remove build artifacts and tear down containers with volumes
 clean:

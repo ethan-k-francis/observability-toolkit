@@ -122,6 +122,21 @@ observability-toolkit/
 
 ---
 
+## Logging Profile (Loki)
+
+The metrics stack can be extended with **Loki + Promtail** for log aggregation:
+
+```bash
+make up-logs    # metrics + Loki/Promtail/Grafana on :3001
+make down-logs
+```
+
+Grafana (logs instance): http://localhost:3001 — Explore → Loki → `{container=~".+"}`
+
+Files: `docker-compose.loki.yaml`, `loki/loki-config.yaml`, `loki/promtail-config.yaml`
+
+---
+
 ## Future Enhancements
 
 - **OpenTelemetry bridge** — export metrics via OTLP in addition to Prometheus scraping

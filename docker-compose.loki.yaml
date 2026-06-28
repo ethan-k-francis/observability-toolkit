@@ -1,0 +1,51 @@
+# Optional logging stack: Loki + Promtail + Grafana (logs profile).
+#
+# Usage:
+#   docker compose -f docker-compose.yaml -f docker-compose.loki.yaml --profile logs up -d
+#
+# Grafana: http://localhost:3000 (admin/admin)
+# Explore → Loki datasource → query: {job="exporter"}
+
+services:
+  loki:
+    profiles: ["logs"]
+    image: grafana/loki:3.1.0
+    command: -config.file=/etc/loki/loki-config.yaml
+    volumes:
+      - ./loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
+      - loki-data:/loki
+    ports:
+      - "3100:3100"
+    restart: unless-stopped
+
+  promtail:
+    profiles: ["logs"]
+    image: grafana/promtail:3.1.0
+    command: -config.file=/etc/promtail/promtail-config.yaml
+    volumes:
+      - ./loki/promtail-config.yaml:/etc/promtail/promtail-config.yaml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - loki
+    restart: unless-stopped
+
+  grafana-logs:
+    profiles: ["logs"]
+    image: grafana/grafana:11.1.0
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+      - ./loki/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/loki.yaml:ro
+      - grafana-logs-data:/var/lib/grafana
+    depends_on:
+      - loki
+    restart: unless-stopped
+
+volumes:
+  loki-data:
+  grafana-logs-data:
