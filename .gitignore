@@ -1,0 +1,55 @@
+# Go build artifacts
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Go test artifacts
+*.test
+*.out
+coverage.html
+coverage.txt
+
+# Go module cache (don't ignore go.sum — it's needed for reproducible builds)
+vendor/
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.venv/
+venv/
+env/
+
+# Docker artifacts
+.docker/
+
+# Environment and secrets
+.env
+.env.local
+*.pem
+*.key
+
+# Grafana data (persisted via Docker volume, not tracked)
+grafana/data/
+
+# Prometheus data (persisted via Docker volume, not tracked)
+prometheus/data/
+AGENTS.md
+.cursor/

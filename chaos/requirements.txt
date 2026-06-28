@@ -1,0 +1,8 @@
+# Chaos engineering dependencies for observability-toolkit validation.
+#
+# requests: HTTP client for calling the exporter's /chaos endpoint and Prometheus API
+# docker: Docker SDK for container lifecycle management (stop, start, exec)
+# click: CLI framework for the chaos runner command-line interface
+requests>=2.31.0
+docker>=7.0.0
+click>=8.1.0
