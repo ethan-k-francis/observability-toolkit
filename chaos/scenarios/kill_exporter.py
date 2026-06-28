@@ -78,8 +78,7 @@ def run(exporter_url: str, prometheus_url: str) -> bool:
         alerts = resp.json().get("data", {}).get("alerts", [])
 
         exporter_down = [
-            a for a in alerts
-            if a.get("labels", {}).get("alertname") == "ExporterDown"
+            a for a in alerts if a.get("labels", {}).get("alertname") == "ExporterDown"
         ]
 
         if exporter_down:

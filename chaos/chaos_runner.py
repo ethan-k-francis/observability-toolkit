@@ -53,8 +53,7 @@ def check_prometheus_alerts(prometheus_url: str, alert_name: str = None) -> list
         if alert_name:
             # Filter to only the alert we're looking for.
             alerts = [
-                a for a in alerts
-                if a.get("labels", {}).get("alertname") == alert_name
+                a for a in alerts if a.get("labels", {}).get("alertname") == alert_name
             ]
         return alerts
 
@@ -82,6 +81,7 @@ def kill(exporter_url: str, prometheus_url: str):
     expected timeframe (1 minute for-duration + scrape interval).
     """
     from scenarios.kill_exporter import run
+
     success = run(exporter_url, prometheus_url)
     sys.exit(0 if success else 1)
 
@@ -129,6 +129,7 @@ def spike(
     for the alert evaluation window and checks Prometheus for fired alerts.
     """
     from scenarios.spike_metrics import run
+
     success = run(exporter_url, prometheus_url, target, multiplier, duration)
     sys.exit(0 if success else 1)
 
@@ -159,6 +160,7 @@ def stress(container: str, cpu_workers: int, duration: int):
     continue to be served under load.
     """
     from scenarios.resource_stress import run
+
     success = run(container, cpu_workers, duration)
     sys.exit(0 if success else 1)
 

@@ -47,8 +47,7 @@ def run(container_name: str, cpu_workers: int, duration: int) -> bool:
 
     if not containers:
         click.echo(
-            f"ERROR: Container '{container_name}' not found. "
-            "Is the stack running?"
+            f"ERROR: Container '{container_name}' not found. Is the stack running?"
         )
         return False
 
@@ -69,10 +68,7 @@ def run(container_name: str, cpu_workers: int, duration: int) -> bool:
     # Step 3: Apply CPU stress via HTTP load (works with distroless images).
     # Since distroless images don't have a shell, we generate load by making
     # rapid concurrent metric scrape requests instead.
-    click.echo(
-        f"Applying stress: {cpu_workers} concurrent scrapers "
-        f"for {duration}s..."
-    )
+    click.echo(f"Applying stress: {cpu_workers} concurrent scrapers for {duration}s...")
 
     import concurrent.futures
     import threading
@@ -106,9 +102,7 @@ def run(container_name: str, cpu_workers: int, duration: int) -> bool:
     with concurrent.futures.ThreadPoolExecutor(
         max_workers=cpu_workers,
     ) as executor:
-        futures = [
-            executor.submit(stress_worker) for _ in range(cpu_workers)
-        ]
+        futures = [executor.submit(stress_worker) for _ in range(cpu_workers)]
 
         # Monitor progress while stress test runs.
         for elapsed in range(0, duration, 5):
@@ -139,9 +133,7 @@ def run(container_name: str, cpu_workers: int, duration: int) -> bool:
 
     if healthy:
         click.echo("SUCCESS: Exporter survived the stress test")
-        error_rate = (
-            stress_errors / max(1, stress_successes + stress_errors) * 100
-        )
+        error_rate = stress_errors / max(1, stress_successes + stress_errors) * 100
         click.echo(f"  Error rate during stress: {error_rate:.1f}%")
         return True
     else:

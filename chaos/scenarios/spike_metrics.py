@@ -79,8 +79,7 @@ def run(
     # We use a shorter wait for demo purposes and check periodically.
     wait_seconds = min(duration + 60, 360)
     click.echo(
-        f"Monitoring for alerts over {wait_seconds}s "
-        f"(chaos active for {duration}s)..."
+        f"Monitoring for alerts over {wait_seconds}s (chaos active for {duration}s)..."
     )
 
     # Poll Prometheus periodically rather than waiting the full duration.
@@ -111,9 +110,7 @@ def run(
             # Show pending alerts as progress feedback.
             pending = [a for a in alerts if a.get("state") == "pending"]
             if pending:
-                names = [
-                    a.get("labels", {}).get("alertname", "?") for a in pending
-                ]
+                names = [a.get("labels", {}).get("alertname", "?") for a in pending]
                 click.echo(f"  Pending alerts: {', '.join(names)}")
 
         except requests.RequestException:
