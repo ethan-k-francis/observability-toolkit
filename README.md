@@ -79,6 +79,10 @@ curl http://localhost:9090/metrics
 open http://localhost:3000  # login: admin / admin
 
 # Run a chaos test (spike metrics, check alerts)
+# One-time chaos setup on Ubuntu 24.04+ (PEP 668 — use a venv, not system pip):
+#   sudo apt-get install -y python3-venv
+#   python3 -m venv .venv && source .venv/bin/activate
+#   pip install -r chaos/requirements.txt
 make chaos-spike
 
 # Stop everything
@@ -87,7 +91,22 @@ make down
 
 ---
 
-## What's inside
+## Chaos engineering setup
+
+Chaos scripts need Python packages (`docker`, `requests`, `click`). On **Ubuntu 24.04+**, system Python is externally managed — use a **virtual environment**:
+
+```bash
+sudo apt-get install -y python3-venv   # once, if venv creation fails
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r chaos/requirements.txt
+make up
+make chaos-spike    # or chaos-kill, chaos-stress
+```
+
+`make` automatically uses `.venv/bin/python` when `.venv` exists. Ensure the stack is running (`make up`) before chaos scenarios that talk to Docker.
+
+---
 
 | Piece | Technology | What it does |
 |---|---|---|

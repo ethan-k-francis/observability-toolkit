@@ -5,6 +5,8 @@
 
 BINARY := observability-toolkit
 COMPOSE_PROJECT := observability-toolkit
+# Prefer project venv on PEP 668 hosts (Ubuntu 24.04+); fall back to system python3.
+CHAOS_PYTHON := $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 
 .PHONY: build test lint up down clean help
 .PHONY: chaos-run chaos-kill chaos-spike chaos-stress
@@ -41,8 +43,7 @@ clean:
 # --- Chaos Engineering ---
 # These targets run chaos scenarios that inject failures and validate
 # that the monitoring pipeline (metrics → Prometheus → alerts) works.
-# Prerequisites: stack must be running (make up) and Python deps installed
-# (pip install -r chaos/requirements.txt).
+# Prerequisites: stack must be running (make up) and Python deps in a venv (see README).
 
 ## chaos-run: Show available chaos engineering scenarios
 chaos-run:
@@ -51,7 +52,7 @@ chaos-run:
 	@echo ""
 	@echo "Prerequisites:"
 	@echo "  1. Stack is running: make up"
-	@echo "  2. Python deps installed: pip install -r chaos/requirements.txt"
+	@echo "  2. Chaos venv ready (see README): source .venv/bin/activate"
 	@echo ""
 	@echo "Available scenarios:"
 	@echo "  make chaos-kill    Kill exporter, verify ExporterDown alert"
@@ -59,19 +60,19 @@ chaos-run:
 	@echo "  make chaos-stress  CPU/memory stress on exporter container"
 	@echo ""
 	@echo "Or run directly:"
-	@echo "  cd chaos && python3 chaos_runner.py --help"
+	@echo "  cd chaos && $(CHAOS_PYTHON) chaos_runner.py --help"
 
 ## chaos-kill: Kill the exporter container and verify ExporterDown alert fires
 chaos-kill:
-	cd chaos && python3 chaos_runner.py kill
+	cd chaos && $(CHAOS_PYTHON) chaos_runner.py kill
 
 ## chaos-spike: Spike DB pool metrics to trigger HighDBPoolUtilization alert
 chaos-spike:
-	cd chaos && python3 chaos_runner.py spike --target dbpool --multiplier 3 --duration 360
+	cd chaos && $(CHAOS_PYTHON) chaos_runner.py spike --target dbpool --multiplier 3 --duration 360
 
 ## chaos-stress: Stress test the exporter container with concurrent load
 chaos-stress:
-	cd chaos && python3 chaos_runner.py stress --duration 30
+	cd chaos && $(CHAOS_PYTHON) chaos_runner.py stress --duration 30
 
 # --- Local CI ---
 
