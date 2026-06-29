@@ -51,5 +51,3 @@ grafana/data/
 
 # Prometheus data (persisted via Docker volume, not tracked)
 prometheus/data/
-AGENTS.md
-.cursor/
