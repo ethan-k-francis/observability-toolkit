@@ -19,12 +19,9 @@ services:
       dockerfile: Dockerfile
     ports:
       - "9090:9090"
+    # Distroless runtime has no shell/wget — rely on service_started; verify via host curl or CI.
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 5s
+      disable: true
     restart: unless-stopped
 
   # Prometheus scrapes the exporter every 15s, stores time-series data,
@@ -45,7 +42,7 @@ services:
       - "--web.enable-lifecycle"
     depends_on:
       exporter:
-        condition: service_healthy
+        condition: service_started
     restart: unless-stopped
 
   # Grafana auto-provisions the Prometheus datasource and dashboard directory
