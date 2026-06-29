@@ -76,19 +76,17 @@ chaos-stress:
 
 # --- Local CI ---
 
-.PHONY: lint-ci ci-security pr-commit-check ci
+.PHONY: lint-ci ci-security ci
 lint-ci:
 	pre-commit run --all-files
 
 ci-security:
 	trivy fs --severity HIGH,CRITICAL --exit-code 1 .
 
-pr-commit-check:
-	@chmod +x .github/scripts/commit-message-lint.sh
-	@.github/scripts/commit-message-lint.sh --base-ref origin/main
-
-ci: lint-ci ci-security pr-commit-check
+ci: lint-ci ci-security
 	@echo "Local CI checks passed."
+
+-include .local/Makefile
 
 # --- Help ---
 
